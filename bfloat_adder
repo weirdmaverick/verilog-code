@@ -1,0 +1,90 @@
+module bfloat16_add(
+    in_A,
+    in_B,
+    select, // This input is not used in current implementation
+
+    out_result
+);
+
+input [15:0] in_A;
+input [15:0] in_B;
+input select; // Ignored in this implementation
+
+output reg [15:0] out_result;
+
+// Internal signals
+reg [7:0] exp_A, exp_B;
+reg [6:0] mant_A, mant_B;
+reg sign_A, sign_B;
+reg [7:0] exp_diff;
+reg [22:0] mant_diff;
+reg [7:0] exp_result;
+reg [22:0] mant_result;
+reg sign_result;
+reg overflow, underflow;
+
+// Extract the sign, exponent, and mantissa from the inputs
+always @(*) begin
+    sign_A = in_A[15];
+    exp_A = in_A[14:7];
+    mant_A = {1'b1, in_A[6:0]}; // Implicit leading bit for normalized numbers
+
+    sign_B = in_B[15];
+    exp_B = in_B[14:7];
+    mant_B = {1'b1, in_B[6:0]}; // Implicit leading bit for normalized numbers
+
+    // Initialize flags
+    overflow = 0;
+    underflow = 0;
+
+    // Compare exponents and align mantissas
+    if (exp_A > exp_B) begin
+        exp_diff = exp_A - exp_B;
+        mant_B = mant_B >> exp_diff;
+        exp_result = exp_A;
+    end else begin
+        exp_diff = exp_B - exp_A;
+        mant_A = mant_A >> exp_diff;
+        exp_result = exp_B;
+    end
+
+    // Add or subtract mantissas based on sign
+    if (sign_A == sign_B) begin
+        mant_result = mant_A + mant_B;
+        sign_result = sign_A;
+    end else begin
+        if (mant_A > mant_B) begin
+            mant_result = mant_A - mant_B;
+            sign_result = sign_A;
+        end else begin
+            mant_result = mant_B - mant_A;
+            sign_result = sign_B;
+        end
+    end
+
+    // Normalize result
+    while (mant_result > 8'hFF) begin
+        mant_result = mant_result >> 1;
+        exp_result = exp_result + 1;
+    end
+
+    // Check for overflow/underflow
+    if (exp_result >= 8'hFF) begin
+        overflow = 1;
+    end else if (exp_result == 0) begin
+        underflow = 1;
+    end
+
+    // Assemble the result
+    if (overflow) begin
+        out_result = {sign_result, 8'hFF, 7'b0000000}; // Overflow (Infinity)
+    end else if (underflow) begin
+        out_result = 16'b0; // Underflow (Zero)
+    end else if (mant_result==0) begin
+         exp_result = 8'b0; 
+    end else begin
+        out_result = {sign_result, exp_result, mant_result[6:0]};
+    end
+end
+
+endmodule
