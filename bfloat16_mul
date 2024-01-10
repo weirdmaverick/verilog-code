@@ -1,0 +1,103 @@
+module bfloat16_mul(
+    input [15:0] in_A,
+    input [15:0] in_B,
+    output reg [15:0] out_result
+);
+
+// Extract the sign, exponent, and mantissa fields from the inputs
+wire sign_A = in_A[15];
+wire sign_B = in_B[15];
+wire [7:0] exponent_A = in_A[14:7];
+wire [7:0] exponent_B = in_B[14:7];
+wire [6:0] mantissa_A = in_A[6:0];
+wire [6:0] mantissa_B = in_B[6:0];
+
+// Calculate the sign of the result
+wire sign_result = sign_A ^ sign_B;
+
+// Special case handling
+reg [7:0] exponent_result;
+reg [6:0] mantissa_result;
+reg special_case;
+
+always @(*) begin
+    // Initialize as non-special case
+    special_case = 0;
+    exponent_result = 0;
+    mantissa_result = 0;
+    out_result = 0; // Default to zero
+
+    // Handle zeros
+    if ((exponent_A == 0 && mantissa_A == 0) || (exponent_B == 0 && mantissa_B == 0)) begin
+        special_case = 1; // Multiplication result is zero
+    end
+    // Handle infinity
+    else if ((exponent_A == 8'hFF && mantissa_A == 0) || (exponent_B == 8'hFF && mantissa_B == 0)) begin
+        special_case = 1;
+        exponent_result = 8'hFF; // Exponent for infinity
+        mantissa_result = 0;     // Mantissa for infinity
+    end
+    // Handle NaN (Not a Number)
+    else if ((exponent_A == 8'hFF) || (exponent_B == 8'hFF)) begin
+        special_case = 1;
+        exponent_result = 8'hFF; // Exponent for NaN
+        mantissa_result = 7'h7F; // Mantissa pattern for NaN
+    end
+
+    // Set the output for special cases
+    if (special_case) begin
+        out_result = {sign_result, exponent_result, mantissa_result};
+    end
+end
+
+// Normal multiplication for non-special cases
+reg [8:0] exponent_product; // 9-bit to handle overflow
+reg [14:0] mantissa_product; // 15-bit to handle the hidden bit and multiplication
+
+always @(*) begin
+    if (!special_case) begin
+        // Multiply mantissas and adjust the exponent
+        mantissa_product = ({1'b1, mantissa_A} * {1'b1, mantissa_B});
+        exponent_product = exponent_A + exponent_B;
+
+        // Adjust for the bias (127)
+        exponent_product = exponent_product - 8'd127;
+
+        // Normalize the product if needed
+        if (mantissa_product[14] == 1) begin
+            // Right shift mantissa if there's an overflow
+            mantissa_product = mantissa_product >> 1;
+            exponent_product = exponent_product + 1'b1;
+        end else begin
+            // Left shift mantissa until the most significant bit is 1
+            while (mantissa_product[14] == 0 && exponent_product > 0) begin
+                mantissa_product = mantissa_product << 1;
+                exponent_product = exponent_product - 1'b1;
+            end
+        end
+
+        // Round the mantissa if the least significant bit of the mantissa is 1
+        if (mantissa_product[6]) begin
+            mantissa_product = mantissa_product + 1;
+            // Check if the mantissa needs to be adjusted due to rounding
+            if (mantissa_product[14]) begin
+                mantissa_product = mantissa_product >> 1;
+                exponent_product = exponent_product + 1'b1;
+            end
+        end
+
+        // Check for overflow and underflow after rounding
+        if (exponent_product >= 9'd255) begin
+            // Overflow, set to infinity
+            out_result = {sign_result, 8'hFF, 7'b0};
+        end else if (exponent_product == 0) begin
+            // Underflow, set to zero
+            out_result = {sign_result, 8'b0, 7'b0};
+        end else begin
+            // Assign the normalized and rounded result
+            out_result = {sign_result, exponent_product[7:0], mantissa_product[14:8]};
+        end
+    end
+end
+
+endmodule
