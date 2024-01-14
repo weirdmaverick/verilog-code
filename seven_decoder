@@ -1,0 +1,80 @@
+`timescale 1ns / 1ps
+
+module remote_control_tb;
+
+reg clk, reset, power, B, U, D, mute, v_u, v_d;
+reg [9:0] N;
+wire [6:0] seg_out, vol_seg_out;
+wire [3:0] anode_out;
+
+// instantiation
+remote_control uut (
+    .clk(clk), 
+    .reset(reset), 
+    .power(power), 
+    .N(N), 
+    .U(U), 
+    .D(D), 
+    .B(B), 
+    .mute(mute), 
+    .v_u(v_u), 
+    .v_d(v_d), 
+    .seg_out(seg_out), 
+    .vol_seg_out(vol_seg_out), 
+    .anode_out(anode_out)
+);
+
+// clock generation
+always #10 clk = ~clk;
+
+initial begin
+    // instantiation
+    clk = 0;
+    reset = 1;
+    power = 1;
+    N = 0;
+    U = 0;
+    D = 0;
+    B = 0;
+    mute = 0;
+    v_u = 0;
+    v_d = 0;
+
+    // reset signal activation
+    #15 reset = 0;
+    #20 reset = 1;
+
+    
+
+    // increasing the channel
+    #50 U = 1; #20 U = 0;
+    #50 U = 1; #20 U = 0;
+
+    // decreasing the channel
+    #50 D = 1; #20 D = 0;
+    #50 D = 1; #20 D = 0;
+
+    // direct channel selection
+    #50 N = 10'b0000000100; // selecting channel 2
+    #50 N = 0;
+
+    // increasing the volume
+    #50 v_u = 1; #20 v_u = 0;
+    #50 v_u = 1; #20 v_u = 0;
+
+    // decreasing the volume
+    #50 v_d = 1; #20 v_d = 0;
+    #50 v_d = 1; #20 v_d = 0;
+
+    // mute test
+    #50 mute = 1; #20 mute = 0;
+    #50 mute = 1; #20 mute = 0;
+
+    // returning before channel
+    #50 B = 1; #20 B = 0;
+
+    // end simulation 
+    #1000 $finish;
+end
+
+endmodule
