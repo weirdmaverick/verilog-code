@@ -1,0 +1,76 @@
+module remote_control(clk, reset, power, N, U, D, B, mute, v_u, v_d, seg_out, vol_seg_out, anode_out);
+    input clk, reset, power, B, U, D, mute, v_u, v_d;
+    input [9:0] N;
+    output [6:0] seg_out, vol_seg_out;
+    output [3:0] anode_out;
+
+    reg [3:0] current_channel, BQ, current_volume, LV, saved_volume;
+    reg is_muted;
+
+    assign anode_out = power ? 4'b0001 : 4'b0000;
+
+    always @(posedge clk, negedge reset) begin
+        if (!reset) begin
+            current_channel <= 1;
+            current_volume <= 0; // set the initial volume as 0
+            saved_volume <= 0;
+            is_muted <= 0;
+        end else begin
+            // Update previous channel
+            BQ <= current_channel;
+
+            // Channel Control
+            if (U) begin
+                if (current_channel == 9)
+                    current_channel <= 0;
+                else
+                    current_channel <= current_channel + 1;
+            end else if (D) begin
+                if (current_channel == 0)
+                    current_channel <= 9;
+                else
+                    current_channel <= current_channel - 1;
+            end else if (B)
+                current_channel <= BQ;
+            else begin
+                case (1'b1)
+                    N[0]: current_channel <= 0;
+                    N[1]: current_channel <= 1;
+                    N[2]: current_channel <= 2;
+		    N[3]: current_channel <= 3;
+                    N[4]: current_channel <= 4;
+                    N[5]: current_channel <= 5;
+                    N[6]: current_channel <= 6;
+                    N[7]: current_channel <= 7;
+                    N[8]: current_channel <= 8;
+                    N[9]: current_channel <= 9;
+                    
+                endcase
+            end
+
+            // Volume Control
+            if (mute) begin
+                if (!is_muted) begin
+                    saved_volume <= current_volume;
+                    current_volume <= 0;
+                    is_muted <= 1;
+                end else begin
+                    current_volume <= saved_volume;
+                    is_muted <= 0;
+                end
+            end else if (v_u && !is_muted) begin
+                if (current_volume == 15)
+                    current_volume <= 0;
+                else
+                    current_volume <= current_volume + 1;
+            end else if (v_d && !is_muted) begin
+                if (current_volume == 0)
+                    current_volume <= 15;
+                else
+                    current_volume <= current_volume - 1;
+            end
+        end
+    end
+
+    sevenseg_decoder d1(.in(current_volume), .out1(vol_seg_out));
+endmodule
