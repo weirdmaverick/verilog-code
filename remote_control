@@ -4,7 +4,7 @@ module remote_control(clk, reset, power, N, U, D, B, mute, v_u, v_d, seg_out, vo
     output [6:0] seg_out, vol_seg_out;
     output [3:0] anode_out;
 
-    reg [3:0] current_channel, BQ, current_volume, LV, saved_volume;
+    reg [3:0] current_channel, BQ, current_volume,saved_volume;
     reg is_muted;
 
     assign anode_out = power ? 4'b0001 : 4'b0000;
